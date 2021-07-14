@@ -1,6 +1,5 @@
 import json
 import threading
-import multiprocessing
 import time
 import queue
 from requests.exceptions import HTTPError, ReadTimeout
@@ -30,7 +29,6 @@ class Search:
             self.quiet = True
 
     def search(self, api, nextPageUrl=None, query=None):
-        t = multiprocessing.current_process()
         np = queue.Queue()
         if query is None:
             np.put_nowait(nextPageUrl)
@@ -52,26 +50,26 @@ class Search:
             except HTTPError as e:
                 if e.response.status_code == 429 or e.response.status_code == 401:
                     if e.response.status_code == 401:
-                        self.log.warning(f'{t.name}: Unauthorized. Trying relogin...')
+                        self.log.warning('Unauthorized. Trying relogin...')
                     else:
-                        self.log.warning(f'{t.name}: search got rate limited')
+                        self.log.warning('search got rate limited')
                     api = GooglePlayAPI(self.locale, self.timezone, self.device, self.delay)
                     while True:
                         try:
                             api.envLogin(quiet=self.quiet, check=False)
                         except LoginError:
-                            self.log.info(f'{t.name}: Login failed. Retry in 3 minutes')
+                            self.log.info('Login failed. Retry in 3 minutes')
                             time.sleep(180)
                         else:
                             break
-                    self.log.debug(f'{t.name}: new api, logged in, try again')
+                    self.log.debug('new api, logged in, try again')
                     np.put_nowait(nextPageUrl)
                     continue
                 else:
                     self.log.warning(str(e))
 
             if len(result) != 1:
-                self.log.warning(f'{t.name}: Pages: Got result with len {len(result)}')
+                self.log.warning(f'Pages: Got result with len {len(result)}')
                 self.log.debug(result)
                 continue
 
@@ -84,7 +82,7 @@ class Search:
                 pass
 
             if clusters is None:
-                self.log.debug(f'{t.name}: No clusters found in searchPages')
+                self.log.debug('No clusters found in searchPages')
                 continue
 
             num_pages += 1
@@ -104,9 +102,7 @@ class Search:
                         pass
                     else:
                         apps += 1
-                self.log.debug(
-                    f"{t.name}: queue: {np.qsize()}, pages: Found {apps} apps in cluster {cluster.get('title')}"
-                )
+                self.log.debug(f"queue: {np.qsize()}, pages: Found {apps} apps in cluster {cluster.get('title')}")
 
                 try:
                     np.put_nowait(cluster['containerMetadata']['nextPageUrl'])
@@ -115,12 +111,9 @@ class Search:
         return ids
 
     def worker(self, api, q, ids, done_searchTerms, tmp_file):
-        # t = threading.current_thread()
-        t = multiprocessing.current_process()
-
         while not q.empty():
             searchTerm = q.get_nowait()  # non blocking
-            self.log.debug(f'{t.name}: Start searching "{searchTerm}" id: {id(ids)}')
+            self.log.debug(f'Start searching "{searchTerm}"')
 
             try:
                 sids = self.search(api, query=searchTerm)
@@ -128,43 +121,44 @@ class Search:
             except HTTPError as e:
                 if e.response.status_code == 429 or e.response.status_code == 401:
                     if e.response.status_code == 401:
-                        self.log.warning(f'{t.name}: Unauthorized. Trying relogin...')
+                        self.log.warning('Unauthorized. Trying relogin...')
                     else:
-                        self.log.warning(f'{t.name}: search worker got rate limited')
+                        self.log.warning('search worker got rate limited')
                     api = GooglePlayAPI(self.locale, self.timezone, self.device, self.delay)
                     while True:
                         try:
                             api.envLogin(quiet=self.quiet, check=False)
                         except LoginError:
-                            self.log.info(f'{t.name}: Login failed. Retry in 3 minutes')
+                            self.log.info('Login failed. Retry in 3 minutes')
                             time.sleep(180)
                         else:
                             break
-                    self.log.debug(f'{t.name}: new api, logged in, add back {searchTerm}')
+                    self.log.debug(f'new api, logged in, add back {searchTerm}')
                     q.put_nowait(searchTerm)
                 else:
                     self.log.warning(str(e))
 
             except ReadTimeout:
-                self.log.debug(f'{t.name}: Request did timeout (search), add back {searchTerm}')
+                self.log.debug(f'Request did timeout (search), add back {searchTerm}')
                 q.put_nowait(searchTerm)
 
             q.task_done()
-            before = len(set(ids))
-            ids.extend(sids)
-            new = len(set(ids)) - before
-            self.log.debug(f'{t.name}: {searchTerm}: Got {len(sids)} package names, {new} new')
+            before = len(ids)
+            ids.update(sids)
+            new = len(ids) - before
+            self.log.debug(f'{searchTerm}: Got {len(sids)} package names, {new} new')
 
-            self.log.info(f'{t.name}: Done: {len(done_searchTerms)}, to do: {q.qsize()} received {len(ids)} ids')
-            done_searchTerms.append(searchTerm)
+            self.log.info(f'Done: {len(done_searchTerms)}, to do: {q.qsize()} received {len(ids)} ids')
+            done_searchTerms.add(searchTerm)
 
             # save tmp file every 10 search terms
             if len(done_searchTerms) % 10 == 0:
-                self.log.debug(f'{t.name}: Saving tmp file {tmp_file}')
+                self.log.debug(f'Saving tmp file {tmp_file}')
                 with open(tmp_file, 'w') as f:
                     json.dump({"done": list(done_searchTerms), "ids": list(ids)}, f, indent=2)
 
-        self.log.info(f'{t.name}: finished. Queue empty')
+        t = threading.current_thread()
+        self.log.info(f'{t.name} finished. Queue empty')
         t.done = True
         return
 
@@ -182,23 +176,22 @@ class Search:
 
         tmp_file = out_file + '_tmp.json'
 
-        m = multiprocessing.Manager()
-        ids = m.list()
-        done_searchTerms = m.list()
+        ids = set()
+        done_searchTerms = set()
 
         # resume from tmp file if it exists
         try:
             with open(tmp_file) as f:
                 done = json.load(f)
-            done_searchTerms.extend(done['done'])
-            ids.extend(done['ids'])
+            done_searchTerms.update(done['done'])
+            ids.update(done['ids'])
         except FileNotFoundError:
             pass
         except Exception as e:
             self.log.warning(str(e))
 
-        todo_seachTerms = set(all_searchTerms) - set(done_searchTerms)
-        q = m.Queue()
+        todo_seachTerms = all_searchTerms - done_searchTerms
+        q = queue.Queue()
         for searchTerm in todo_seachTerms:
             q.put_nowait(searchTerm)
 
@@ -217,8 +210,7 @@ class Search:
                         time.sleep(180)
                     else:
                         break
-                # t = threading.Thread(target=self.worker, args=(api, q, ids, done_searchTerms, tmp_file))
-                t = multiprocessing.Process(target=self.worker, args=(api, q, ids, done_searchTerms, tmp_file))
+                t = threading.Thread(target=self.worker, args=(api, q, ids, done_searchTerms, tmp_file))
                 i += 1
                 t.name = f'Worker-{i}'
                 t.done = False
@@ -227,7 +219,6 @@ class Search:
                 self.log.info(f'Started {t.name}')
                 # wait 10-11 min to start next thread
                 # time.sleep(60 * 10 + random() * 60)
-                time.sleep(5)
 
             for t in threads:
                 t.join(timeout=1)
