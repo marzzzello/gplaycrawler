@@ -12,9 +12,33 @@
 
 Discover apps by different mehtods. Mass download app packages and metadata.
 
-## Requirements
+## Setup
 
-playstoreapi
+Install protobuf:
+
+Using apt:
+
+```sh
+$ apt install -y protobuf-compiler
+```
+
+Using pacman:
+
+```sh
+$ pacman -S protobuf
+```
+
+Check version:
+
+```sh
+$ protoc --version  # Ensure compiler version is 3+
+```
+
+Install gplaycrawler using pip:
+
+```
+$ pip install gplaycrawler
+```
 
 ## Usage
 
@@ -29,8 +53,8 @@ export CURL_CA_BUNDLE='/usr/local/myproxy_info/cacert.pem'
 ```
 
 ```
-usage: __main__.py [-h] [-v {warning,info,debug}]
-                   {help,usage,charts,search,related,metadata,packages} ...
+usage: gplaycrawler [-h] [-v {warning,info,debug}]
+                    {help,usage,charts,search,related,metadata,packages} ...
 
 Crawl the Google PlayStore
 
@@ -63,11 +87,11 @@ Common optional arguments for related, search, metadata, packages:
 
 
 related:
-usage: __main__.py related [-h] [--locale LOCALE] [--timezone TIMEZONE]
-                           [--device DEVICE] [--delay DELAY]
-                           [--threads THREADS] [--output OUTPUT]
-                           [--level LEVEL]
-                           input
+usage: gplaycrawler related [-h] [--locale LOCALE] [--timezone TIMEZONE]
+                            [--device DEVICE] [--delay DELAY]
+                            [--threads THREADS] [--output OUTPUT]
+                            [--level LEVEL]
+                            input
 
 parallel searching of apps via related apps
 
@@ -80,10 +104,10 @@ optional arguments:
 
 
 search:
-usage: __main__.py search [-h] [--locale LOCALE] [--timezone TIMEZONE]
-                          [--device DEVICE] [--delay DELAY]
-                          [--threads THREADS] [--output OUTPUT]
-                          [--length LENGTH]
+usage: gplaycrawler search [-h] [--locale LOCALE] [--timezone TIMEZONE]
+                           [--device DEVICE] [--delay DELAY]
+                           [--threads THREADS] [--output OUTPUT]
+                           [--length LENGTH]
 
 parallel searching of apps via search terms
 
@@ -93,10 +117,10 @@ optional arguments:
 
 
 metadata:
-usage: __main__.py metadata [-h] [--locale LOCALE] [--timezone TIMEZONE]
-                            [--device DEVICE] [--delay DELAY]
-                            [--threads THREADS] [--output OUTPUT]
-                            input
+usage: gplaycrawler metadata [-h] [--locale LOCALE] [--timezone TIMEZONE]
+                             [--device DEVICE] [--delay DELAY]
+                             [--threads THREADS] [--output OUTPUT]
+                             input
 
 parallel scraping of app metadata
 
@@ -109,11 +133,11 @@ optional arguments:
 
 
 packages:
-usage: __main__.py packages [-h] [--locale LOCALE] [--timezone TIMEZONE]
-                            [--device DEVICE] [--delay DELAY]
-                            [--threads THREADS] [--output OUTPUT]
-                            [--expansions] [--splits]
-                            input
+usage: gplaycrawler packages [-h] [--locale LOCALE] [--timezone TIMEZONE]
+                             [--device DEVICE] [--delay DELAY]
+                             [--threads THREADS] [--output OUTPUT]
+                             [--expansions] [--splits]
+                             input
 
 parallel downloading app packages
 
