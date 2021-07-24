@@ -1,0 +1,50 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "gplaycrawler: related",
+      "type": "python",
+      "request": "launch",
+      "program": "gplaycrawler/__main__.py",
+      "args": ["related", "ids.json"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "gplaycrawler: usage",
+      "type": "python",
+      "request": "launch",
+      "program": "gplaycrawler/__main__.py",
+      "args": ["usage"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "gplaycrawler: search",
+      "type": "python",
+      "request": "launch",
+      "program": "gplaycrawler/__main__.py",
+      "args": ["-v", "debug", "search", "--threads", "2", "--output", "ids_seach-aaa-zzz"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "gplaycrawler: packages with splits and expansions",
+      "type": "python",
+      "request": "launch",
+      "program": "gplaycrawler/__main__.py",
+      "args": ["-v", "debug", "packages", "ids.json", "--threads", "1", "--expansions", "--splits", "--delay", "0.51"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "gplaycrawler: packages",
+      "type": "python",
+      "request": "launch",
+      "program": "gplaycrawler/__main__.py",
+      "args": ["-v", "debug", "packages", "ids.json", "--threads", "1"],
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

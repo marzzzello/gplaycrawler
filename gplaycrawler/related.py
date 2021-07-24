@@ -5,7 +5,7 @@ import queue
 from requests.exceptions import HTTPError, ReadTimeout
 import random
 
-from gpapi.googleplay import GooglePlayAPI, LoginError  # , URL_FDFE
+from playstoreapi.googleplay import GooglePlayAPI, LoginError
 from gplaycrawler.utils import get_logger
 
 
@@ -49,7 +49,7 @@ class Related:
                         self.log.warning('Unauthorized. Trying relogin...')
                     else:
                         self.log.debug('streamPages got rate limited')
-                    api = GooglePlayAPI(self.locale, self.timezone, self.device, self.delay)
+                    api = GooglePlayAPI(self.locale, self.timezone, self.device, delay=self.delay)
                     while True:
                         try:
                             api.envLogin(quiet=self.quiet)
@@ -59,9 +59,9 @@ class Related:
                         else:
                             break
                     self.log.debug('new api, logged in, try again')
-                    continue
                 else:
                     self.log.warning(str(e))
+                continue
 
             except ReadTimeout:
                 self.log.debug('Request did timeout (pages), try again in 1 min')
@@ -119,7 +119,7 @@ class Related:
             # print('return', len(ids), ids)
             # return ids
 
-    def worker(self, api, q, ids, done_ids, shared, tmp_file, until_level=3):
+    def worker(self, api, q, ids, done_ids, shared, tmp_file, out_file, until_level=3):
         s = shared
         t = threading.current_thread()
         t.level = s['level']
@@ -157,8 +157,13 @@ class Related:
                 self.log.info(f'Done with level {s["level"]}. Got {len(ids)} IDs. Done IDs: {len(done_ids)}')
 
                 self.log.info('Saving json file\n')
-                with open(f'package_names_level_{s["level"]}.json', 'w') as f:
-                    json.dump(list(ids), f)
+                if s['level'] > until_level:
+                    filename = f'{out_file}.json'
+                else:
+                    filename = f'{out_file}_level-{s["level"]}.json'
+
+                with open(filename, 'w') as f:
+                    json.dump({"done": list(done_ids), "ids": list(ids)}, f, indent=2)
 
                 if s['level'] > until_level:
                     self.log.info(f'{t.name}: First thread done')
@@ -178,7 +183,7 @@ class Related:
                         self.log.warning('Unauthorized. Trying relogin...')
                     else:
                         self.log.debug('streamDetails got rate limited')
-                    api = GooglePlayAPI(self.locale, self.timezone, self.device, self.delay)
+                    api = GooglePlayAPI(self.locale, self.timezone, self.device, delay=self.delay)
                     while True:
                         try:
                             api.envLogin(quiet=self.quiet)
@@ -189,19 +194,23 @@ class Related:
                             break
                     self.log.debug(f'new api, logged in, add back {packageName}')
                     q.put_nowait(packageName)
+                    q.task_done()
+                    continue
                 else:
                     self.log.warning(str(e))
-
             except ReadTimeout:
                 self.log.debug(f'Request did timeout (details), add back {packageName}')
                 q.put_nowait(packageName)
+                q.task_done()
+                continue
 
             q.task_done()
             self.log.info(f'Done: {len(done_ids)}, to do: {q.qsize()} received {len(ids)} ids (level {t.level})')
             done_ids.add(packageName)
 
-            # save tmp file every 10 search terms
-            if len(done_ids) % 10 == 0:
+            # save tmp file regularly
+            num_threads = len(s['threads'])
+            if len(done_ids) % (100 * num_threads) == 0:
                 self.log.debug(f'Saving tmp file {tmp_file}')
                 with open(tmp_file, 'w') as f:
                     json.dump({"done": list(done_ids), "ids": list(ids)}, f, indent=2)
@@ -222,6 +231,8 @@ class Related:
             self.log.info('doesn\'t look like a charts.json. Trying to load level file')
             if type(input_dict) == list:
                 in_ids.update(input_dict)
+            elif type(input_dict.get('ids')) == list:
+                in_ids.update(input_dict['ids'])
             else:
                 self.log.error('Could not load input file')
                 return
@@ -250,16 +261,6 @@ class Related:
 
         self.log.info(f'Done: {len(done_ids)}, to do: {q.qsize()} received {len(ids)} ids')
 
-        api = GooglePlayAPI(self.locale, self.timezone, self.device, delay=self.delay)
-        while True:
-            try:
-                api.envLogin(quiet=self.quiet)
-            except LoginError:
-                self.log.info('Login failed. Retry in 3 minutes')
-                time.sleep(180)
-            else:
-                break
-
         # needs to be dict
         shared = dict()
         shared['level'] = 0
@@ -268,13 +269,25 @@ class Related:
         i = 0
         while True:
             while len(shared['threads']) < threads:
-                t = threading.Thread(target=self.worker, args=(api, q, ids, done_ids, shared, tmp_file, until_level))
+                api = GooglePlayAPI(self.locale, self.timezone, self.device, delay=self.delay)
+                while True:
+                    try:
+                        api.envLogin(quiet=self.quiet)
+                    except LoginError:
+                        self.log.info('Login failed. Retry in 3 minutes')
+                        time.sleep(180)
+                    else:
+                        break
+
+                t = threading.Thread(
+                    target=self.worker, args=(api, q, ids, done_ids, shared, tmp_file, out_file, until_level)
+                )
                 i += 1
                 t.name = f'Worker-{i}'
                 t.done = False
                 shared['threads'].append(t)
                 t.start()
-            # q.join() # wait until queue is empty
+                self.log.info(f'Started {t.name}')
 
             for t in shared['threads']:
                 t.join(timeout=1)
@@ -283,5 +296,9 @@ class Related:
                         threads -= 1
                     else:
                         self.log.info(f'Worker {t.name} crashed. Starting a new worker')
+                        time.sleep(1)
 
         self.log.info('Threads finished')
+        self.log.info(f'Saving out file {out_file}.json')
+        with open(out_file + '.json', 'w') as f:
+            json.dump({"done": list(done_ids), "ids": list(ids)}, f, indent=2)

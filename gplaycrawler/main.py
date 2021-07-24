@@ -1,11 +1,13 @@
 # stdlib
 from argparse import ArgumentParser, HelpFormatter
 from importlib.metadata import metadata
-from os import path
 
 # internal
 from gplaycrawler.related import Related
 from gplaycrawler.search import Search
+from gplaycrawler.metadata import Metadata
+from gplaycrawler.packages import Packages
+from gplaycrawler.charts import Charts
 
 
 class F(HelpFormatter):
@@ -45,18 +47,14 @@ def main():
 
     # Subparsers based on parent
 
-    # related
-    d = 'Get apps via related apps'
-    parser_related = subparsers.add_parser('related', parents=[parent_parser], help=d, description=d, formatter_class=F)
+    # charts
+    d = 'parallel downloading of all cross category app charts'
+    parser_charts = subparsers.add_parser('charts', parents=[parent_parser], help=d, description=d, formatter_class=F)
 
-    parser_related.add_argument('input', help='name of the input file (default: %(default)s)', default='charts.json')
-    parser_related.add_argument(
-        '--output', help='base name of the output files (default: %(default)s)', default='ids_related'
-    )
-    parser_related.add_argument('--level', default=3, help='How deep to crawl (default: %(default)s)', type=int)
+    parser_charts.add_argument('--output', help='name of the output file (default: %(default)s)', default='charts.json')
 
     # search
-    d = 'Get apps via search terms'
+    d = 'parallel searching of apps via search terms'
     parser_search = subparsers.add_parser('search', parents=[parent_parser], help=d, description=d, formatter_class=F)
 
     parser_search.add_argument(
@@ -66,30 +64,44 @@ def main():
         '--length', default=2, help='length of strings to search (default: %(default)s)', type=int
     )
 
-    # # dump
-    # d = 'Decrypts und dumps ipa package'
-    # parser_dump = subparsers.add_parser('dump', parents=[parent_parser], help=d, description=d, formatter_class=F)
-    # parser_dump.add_argument('bundleID', help='Bundle ID from app like com.app.name')
-    # parser_dump.add_argument('output', help='Output filename', metavar='PATH')
-    # parser_dump.add_argument(
-    #     '--timeout',
-    #     help='Frida dump timeout (default: %(default)s)',
-    #     type=float,
-    #     default=120,
-    #     metavar='SECONDS',
-    # )
-    # # ssh_cmd
-    # d = 'Execute ssh command on device'
-    # parser_ssh_cmd = subparsers.add_parser('ssh_cmd', parents=[parent_parser], help=d, description=d, formatter_class=F)
-    # parser_ssh_cmd.add_argument('command', help='command')
+    # related
+    d = 'parallel searching of apps via related apps'
+    parser_related = subparsers.add_parser('related', parents=[parent_parser], help=d, description=d, formatter_class=F)
 
-    # # install
-    # d = 'Opens app in appstore on device and simulates touch input to download and installs the app'
-    # parser_install = subparsers.add_parser('install', parents=[parent_parser], help=d, description=d, formatter_class=F)
-    # parser_install.add_argument('itunes_id', help='iTunes ID', type=int)
+    parser_related.add_argument('input', help='name of the input file (default: %(default)s)', default='charts.json')
+    parser_related.add_argument(
+        '--output', help='base name of the output files (default: %(default)s)', default='ids_related'
+    )
+    parser_related.add_argument('--level', default=3, help='How deep to crawl (default: %(default)s)', type=int)
+
+    # metadata
+    d = 'parallel scraping of app metadata'
+    parser_metadata = subparsers.add_parser(
+        'metadata', parents=[parent_parser], help=d, description=d, formatter_class=F
+    )
+
+    parser_metadata.add_argument('input', help='name of the input file (json)')
+    parser_metadata.add_argument(
+        '--output', help='directory name of the output files (default: %(default)s)', default='out_metadata'
+    )
+    # packages
+    d = 'parallel downloading app packages'
+    parser_packages = subparsers.add_parser(
+        'packages', parents=[parent_parser], help=d, description=d, formatter_class=F
+    )
+
+    parser_packages.add_argument('input', help='name of the input file (json)')
+    parser_packages.add_argument(
+        '--output', help='directory name of the output files (default: %(default)s)', default='out_packages'
+    )
+    parser_packages.add_argument(
+        '--expansions', help='also download expansion files (default: %(default)s)', action='store_true'
+    )
+    parser_packages.add_argument(
+        '--splits', help='also download split files (default: %(default)s)', action='store_true'
+    )
 
     args = parser.parse_args()
-    # print(vars(args))
 
     if args.command == 'help' or args.command is None:
         parser.print_help()
@@ -99,7 +111,7 @@ def main():
         parser.print_help()
         print('\n\nAll commands in detail:')
 
-        parentsubparsers = [parser_related, parser_search]
+        parentsubparsers = [parser_related, parser_search, parser_metadata, parser_packages]
         commonargs = ['-h, --help', '--locale', '--timezone', '--device', '--delay', '--threads']
         parentsubparsers_str = []
         for p in parentsubparsers:
@@ -121,14 +133,32 @@ def main():
             print(f"\n\n{p_str}:\n{hn}")
         exit()
 
-    if args.command == 'related':
-        r = Related(
+    if args.command == 'charts':
+        c = Charts(
             locale=args.locale, timezone=args.timezone, device=args.device, delay=args.delay, log_level=args.verbosity
         )
-        r.getRelated(args.input, args.output, until_level=args.level, threads=args.threads)
-
-    if args.command == 'search':
+        c.getCharts(args.output)
+    elif args.command == 'search':
         s = Search(
             locale=args.locale, timezone=args.timezone, device=args.device, delay=args.delay, log_level=args.verbosity
         )
         s.getSearch(args.output, args.threads, args.length)
+    elif args.command == 'related':
+        r = Related(
+            locale=args.locale, timezone=args.timezone, device=args.device, delay=args.delay, log_level=args.verbosity
+        )
+        r.getRelated(args.input, args.output, until_level=args.level, threads=args.threads)
+    elif args.command == 'metadata':
+        m = Metadata(
+            locale=args.locale, timezone=args.timezone, device=args.device, delay=args.delay, log_level=args.verbosity
+        )
+        m.getMetadata(args.input, args.output, args.threads)
+    elif args.command == 'packages':
+        p = Packages(
+            locale=args.locale, timezone=args.timezone, device=args.device, delay=args.delay, log_level=args.verbosity
+        )
+        p.getPackages(args.input, args.output, args.threads, args.expansions, args.splits)
+
+    else:
+        parser.print_help()
+        exit()

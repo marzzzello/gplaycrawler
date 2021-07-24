@@ -4,12 +4,11 @@ import time
 import queue
 from requests.exceptions import HTTPError, ReadTimeout
 
-from gpapi.googleplay import GooglePlayAPI, LoginError
+from playstoreapi.googleplay import GooglePlayAPI, LoginError
 from gplaycrawler.utils import get_logger
 
 import string
 import itertools
-from random import random
 
 
 class Search:
@@ -53,7 +52,7 @@ class Search:
                         self.log.warning('Unauthorized. Trying relogin...')
                     else:
                         self.log.warning('search got rate limited')
-                    api = GooglePlayAPI(self.locale, self.timezone, self.device, self.delay)
+                    api = GooglePlayAPI(self.locale, self.timezone, self.device, delay=self.delay)
                     while True:
                         try:
                             api.envLogin(quiet=self.quiet, check=False)
@@ -64,9 +63,9 @@ class Search:
                             break
                     self.log.debug('new api, logged in, try again')
                     np.put_nowait(nextPageUrl)
-                    continue
                 else:
                     self.log.warning(str(e))
+                continue
 
             if len(result) != 1:
                 self.log.warning(f'Pages: Got result with len {len(result)}')
@@ -110,7 +109,7 @@ class Search:
                     pass
         return ids
 
-    def worker(self, api, q, ids, done_searchTerms, tmp_file):
+    def worker(self, api, q, ids, done_searchTerms, tmp_file, threads):
         while not q.empty():
             searchTerm = q.get_nowait()  # non blocking
             self.log.debug(f'Start searching "{searchTerm}"')
@@ -124,7 +123,7 @@ class Search:
                         self.log.warning('Unauthorized. Trying relogin...')
                     else:
                         self.log.warning('search worker got rate limited')
-                    api = GooglePlayAPI(self.locale, self.timezone, self.device, self.delay)
+                    api = GooglePlayAPI(self.locale, self.timezone, self.device, delay=self.delay)
                     while True:
                         try:
                             api.envLogin(quiet=self.quiet, check=False)
@@ -135,12 +134,16 @@ class Search:
                             break
                     self.log.debug(f'new api, logged in, add back {searchTerm}')
                     q.put_nowait(searchTerm)
+                    q.task_done()
+                    continue
                 else:
                     self.log.warning(str(e))
 
             except ReadTimeout:
                 self.log.debug(f'Request did timeout (search), add back {searchTerm}')
                 q.put_nowait(searchTerm)
+                q.task_done()
+                continue
 
             q.task_done()
             before = len(ids)
@@ -151,8 +154,8 @@ class Search:
             self.log.info(f'Done: {len(done_searchTerms)}, to do: {q.qsize()} received {len(ids)} ids')
             done_searchTerms.add(searchTerm)
 
-            # save tmp file every 10 search terms
-            if len(done_searchTerms) % 10 == 0:
+            # save tmp file regularly
+            if len(done_searchTerms) % (100 * len(threads)) == 0:
                 self.log.debug(f'Saving tmp file {tmp_file}')
                 with open(tmp_file, 'w') as f:
                     json.dump({"done": list(done_searchTerms), "ids": list(ids)}, f, indent=2)
@@ -162,8 +165,17 @@ class Search:
         t.done = True
         return
 
+    def get_strings(self, alphabet):
+        with open('chars.json') as f:
+            chars = json.load(f)
+        for charset in chars:
+            if charset['name'] == alphabet:
+                return charset['chars']
+
     def generate_strings(self, length=3):
         chars = string.ascii_lowercase
+        # nums = string.digits
+
         for item in itertools.product(chars, repeat=length):
             yield "".join(item)
 
@@ -210,7 +222,7 @@ class Search:
                         time.sleep(180)
                     else:
                         break
-                t = threading.Thread(target=self.worker, args=(api, q, ids, done_searchTerms, tmp_file))
+                t = threading.Thread(target=self.worker, args=(api, q, ids, done_searchTerms, tmp_file, threads))
                 i += 1
                 t.name = f'Worker-{i}'
                 t.done = False
