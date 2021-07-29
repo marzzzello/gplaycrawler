@@ -111,7 +111,7 @@ def main():
         parser.print_help()
         print('\n\nAll commands in detail:')
 
-        parentsubparsers = [parser_related, parser_search, parser_metadata, parser_packages]
+        parentsubparsers = [parser_charts, parser_search, parser_related, parser_metadata, parser_packages]
         commonargs = ['-h, --help', '--locale', '--timezone', '--device', '--delay', '--threads']
         parentsubparsers_str = []
         for p in parentsubparsers:

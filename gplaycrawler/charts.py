@@ -23,7 +23,7 @@ class Charts:
         else:
             self.quiet = True
 
-    def getChart(self, api, categorie, chart, ids):
+    def worker(self, api, categorie, chart, ids):
         '''
         Get all ids by downloading all pages
         Every page has 6 entries and the api returns ~110 pages resulting in ~660 ids
@@ -65,7 +65,7 @@ class Charts:
         threads = []
         for cat in categories:
             for chart in charts:
-                t = threading.Thread(target=self.getChart, args=(api, cat, chart, ids))
+                t = threading.Thread(target=self.worker, args=(api, cat, chart, ids))
                 t.name = f'{cat}: {chart}'
                 threads.append(t)
                 print('starting thread', t.name)

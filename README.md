@@ -10,7 +10,7 @@
 
 # gplaycrawler
 
-Discover apps by different mehtods. Mass download app packages and metadata.
+Discover apps by different methods. Mass download app packages and metadata.
 
 ## Setup
 
@@ -19,13 +19,13 @@ Install protobuf:
 Using apt:
 
 ```sh
-$ apt install -y protobuf-compiler
+$ sudo apt install protobuf-compiler
 ```
 
 Using pacman:
 
 ```sh
-$ pacman -S protobuf
+$ sudo pacman -S protobuf
 ```
 
 Check version:
@@ -36,7 +36,7 @@ $ protoc --version  # Ensure compiler version is 3+
 
 Install gplaycrawler using pip:
 
-```
+```sh
 $ pip install gplaycrawler
 ```
 
